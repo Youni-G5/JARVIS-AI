@@ -1,28 +1,175 @@
 version: '3.8'
+
 services:
+  # Bridge API - Gateway principal
   bridge:
-    build: ../apps/bridge_api
+    build:
+      context: ../apps/bridge_api
+      dockerfile: Dockerfile
+    container_name: jarvis-bridge
     ports:
       - "8000:8000"
     environment:
       - STT_HOST=stt:5000
       - LLM_HOST=llm_agent:9000
       - TTS_HOST=tts:7000
-  stt:
-    image: ghcr.io/your/whisper-wrapper:latest
-    ports:
-      - "5000:5000"
-  tts:
-    image: ghcr.io/your/coqui-wrapper:latest
-    ports:
-      - "7000:7000"
+      - VISION_HOST=vision:8002
+      - MEMORY_HOST=memory:8003
+      - ACTION_EXEC_HOST=action_exec:8001
+    depends_on:
+      - stt
+      - tts
+      - llm_agent
+      - vision
+      - memory
+      - action_exec
+    networks:
+      - jarvis-network
+    restart: unless-stopped
+
+  # LLM Agent - Intelligence centrale
   llm_agent:
-    build: ../apps/llm_agent
+    build:
+      context: ../apps/llm_agent
+      dockerfile: Dockerfile
+    container_name: jarvis-llm
     ports:
       - "9000:9000"
+    environment:
+      - LLM_MODEL_PATH=/models/llama-model.gguf
+      - MAX_TOKENS=2048
+      - TEMPERATURE=0.7
+      - MEMORY_HOST=memory:8003
+      - ACTION_EXEC_HOST=action_exec:8001
     volumes:
-      - ./models:/models
-  chroma:
-    image: ghcr.io/chroma/chroma:latest
+      - llm-models:/models
+      - ../apps/llm_agent/prompts:/app/prompts:ro
+    networks:
+      - jarvis-network
+    restart: unless-stopped
+
+  # STT - Speech to Text
+  stt:
+    build:
+      context: ../apps/stt
+      dockerfile: Dockerfile
+    container_name: jarvis-stt
     ports:
-      - "8008:8008"
+      - "5000:5000"
+    environment:
+      - WHISPER_MODEL_SIZE=base
+      - WHISPER_DEVICE=cpu
+      - WHISPER_COMPUTE_TYPE=int8
+      - WHISPER_MODELS_DIR=/models
+    volumes:
+      - whisper-models:/models
+    networks:
+      - jarvis-network
+    restart: unless-stopped
+
+  # TTS - Text to Speech
+  tts:
+    build:
+      context: ../apps/tts
+      dockerfile: Dockerfile
+    container_name: jarvis-tts
+    ports:
+      - "7000:7000"
+    environment:
+      - TTS_MODEL=tts_models/fr/css10/vits
+      - TTS_GPU=false
+      - CUSTOM_VOICES_DIR=/custom_voices
+    volumes:
+      - tts-models:/root/.local/share/tts
+      - custom-voices:/custom_voices
+    networks:
+      - jarvis-network
+    restart: unless-stopped
+
+  # Vision - Computer Vision
+  vision:
+    build:
+      context: ../apps/vision
+      dockerfile: Dockerfile
+    container_name: jarvis-vision
+    ports:
+      - "8002:8002"
+    environment:
+      - YOLO_MODEL=yolov8n.pt
+      - YOLO_DEVICE=cpu
+    volumes:
+      - yolo-models:/root/.cache/ultralytics
+    networks:
+      - jarvis-network
+    restart: unless-stopped
+
+  # Memory - Vector Database
+  memory:
+    build:
+      context: ../apps/memory
+      dockerfile: Dockerfile
+    container_name: jarvis-memory
+    ports:
+      - "8003:8003"
+    environment:
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+    depends_on:
+      - chroma
+    networks:
+      - jarvis-network
+    restart: unless-stopped
+
+  # Action Exec - Sandboxed execution
+  action_exec:
+    build:
+      context: ../apps/action_exec
+      dockerfile: Dockerfile
+    container_name: jarvis-action-exec
+    ports:
+      - "8001:8001"
+    networks:
+      - jarvis-network
+    restart: unless-stopped
+    # Sécurité renforcée pour exécution de commandes
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: false
+    security_opt:
+      - no-new-privileges:true
+
+  # ChromaDB - Vector Store
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    container_name: jarvis-chroma
+    ports:
+      - "8008:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    networks:
+      - jarvis-network
+    restart: unless-stopped
+
+networks:
+  jarvis-network:
+    driver: bridge
+    name: jarvis-network
+
+volumes:
+  llm-models:
+    name: jarvis-llm-models
+  whisper-models:
+    name: jarvis-whisper-models
+  tts-models:
+    name: jarvis-tts-models
+  yolo-models:
+    name: jarvis-yolo-models
+  custom-voices:
+    name: jarvis-custom-voices
+  chroma-data:
+    name: jarvis-chroma-data
