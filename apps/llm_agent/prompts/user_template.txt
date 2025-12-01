@@ -1,0 +1,19 @@
+[USER_ID: {{user_id}}]
+[TIME: {{iso_timestamp}}]
+[CONTEXT: {{retrieved_memory_snippets}}]
+
+Instruction: {{user_text}}
+
+Constraints:
+- Local-only tools: [action_exec, stt, tts, vision, memory].
+- If you need network or cloud, propose local equivalent first.
+- If action involves more than 3 steps, produce plan and request confirmation.
+
+Return format (JSON):
+{
+ "plan":[{"step":1,"desc":"", "tool":null, "args":{}}],
+ "tool_calls":[...],
+ "explanation":"short reasoning (<200 words)",
+ "need_user_confirmation": boolean,
+ "safety":{"level":"low|medium|high","notes":""}
+}
