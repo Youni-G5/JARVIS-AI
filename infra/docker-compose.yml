@@ -1,0 +1,28 @@
+version: '3.8'
+services:
+  bridge:
+    build: ../apps/bridge_api
+    ports:
+      - "8000:8000"
+    environment:
+      - STT_HOST=stt:5000
+      - LLM_HOST=llm_agent:9000
+      - TTS_HOST=tts:7000
+  stt:
+    image: ghcr.io/your/whisper-wrapper:latest
+    ports:
+      - "5000:5000"
+  tts:
+    image: ghcr.io/your/coqui-wrapper:latest
+    ports:
+      - "7000:7000"
+  llm_agent:
+    build: ../apps/llm_agent
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./models:/models
+  chroma:
+    image: ghcr.io/chroma/chroma:latest
+    ports:
+      - "8008:8008"
