@@ -26,8 +26,12 @@ class TTSEngine:
                 self.tts = TTS(model_name=self.model_name, gpu=gpu)
                 print(f"✅ TTS model loaded: {self.model_name}")
                 
-                # Lister modèles disponibles
-                self.available_models = TTS.list_models()
+                # Lister modèles disponibles (fix: use instance method)
+                try:
+                    self.available_models = self.tts.list_models()
+                except:
+                    # Fallback si list_models() ne fonctionne pas
+                    self.available_models = []
             except Exception as e:
                 print(f"❌ Failed to load TTS: {e}")
     
